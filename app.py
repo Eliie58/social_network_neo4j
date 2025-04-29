@@ -100,29 +100,27 @@ class Database:
 
 
     def get_feed(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT p.id, p.content, p.timestamp, u.username, u.name 
-                FROM posts p 
-                JOIN users u ON p.user_id = u.id
-                JOIN followers f ON p.user_id = f.followee_id
-                WHERE f.follower_id = ?
-                ORDER BY p.timestamp DESC
-            """,
-                (user_id,),
-            )
-            return [
-                {
-                    "id": row[0],
-                    "content": row[1],
-                    "timestamp": row[2],
-                    "username": row[3],
-                    "name": row[4],
-                }
-                for row in cursor.fetchall()
-            ]
+        query = """
+        MATCH (u:User)-[:POSTED]->(p:Post)
+        WHERE u.id IN
+            (MATCH (f:User)-[:FOLLOWS]->(u)
+            WHERE f.id = $user_id
+            RETURN u.id)
+        RETURN p.id AS post_id, p.content AS content, p.timestamp AS timestamp, u.username AS username, u.name AS name
+        ORDER BY p.timestamp DESC
+        """
+        result = self._run_query(query, {"user_id": user_id})
+        return [
+            {
+                "id": record["post_id"],
+                "content": record["content"],
+                "timestamp": record["timestamp"],
+                "username": record["username"],
+                "name": record["name"]
+            }
+            for record in result
+        ]
+
 
     # Follow operations
     def follow_user(self, follower_id: str, followee_id: str) -> bool:
@@ -192,7 +190,7 @@ class Database:
 # Web Application
 # ======================
 app = Flask(__name__)
-app.secret_key = "your_secret_key_here"
+app.secret_key = "my_secret_key_123"
 password = os.environ.get("NEO4J_PASSWORD")
 uri = os.environ.get("NEO4J_URI")
 user = os.environ.get("NEO4J_USERNAME")
@@ -206,7 +204,6 @@ with app.app_context():
         db.create_user("alice", "Alice Smith")
         db.create_user("bob", "Bob Johnson")
         db.create_user("charlie", "Charlie Brown")
-
 
 # ======================
 # API Endpoints
