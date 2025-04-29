@@ -66,6 +66,10 @@ class Database:
             )
             return [dict(record) for record in result]
 
+    # ======================
+    # Task 7: Updated Feed Generation using Graph Traversal
+    # ======================
+
     def get_feed(self, user_id: int) -> List[dict]:
         with self.driver.session() as session:
             result = session.run(
@@ -77,10 +81,7 @@ class Database:
             )
             return [dict(record) for record in result]
 
-    # ======================
-    # Task 6: Follow System (Neo4j)
-    # ======================
-
+    # Follow system
     def follow_user(self, follower_id: int, followee_id: int) -> bool:
         with self.driver.session() as session:
             session.run(
