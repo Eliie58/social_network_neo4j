@@ -68,36 +68,36 @@ class Database:
             ]
 
     # Post operations
-    def create_post(self, user_id: int, content: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO posts (user_id, content) VALUES (?, ?)", (user_id, content)
-            )
-            return cursor.lastrowid
-
-    def get_posts_by_user(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
+    def create_post(self, user_id: str, content: str) -> str:
+        with self.driver.session() as session:
+            result = session.run(
                 """
-                SELECT p.id, p.content, p.timestamp, u.username, u.name 
-                FROM posts p JOIN users u ON p.user_id = u.id 
-                WHERE p.user_id = ?
+                MATCH (u:User {id: $user_id})
+                CREATE (p:Post {content: $content, timestamp: datetime()})
+                MERGE (u)-[:POSTED]->(p)
+                RETURN p.id AS post_id
+                """,
+                user_id=user_id,
+                content=content,
+            )
+            record = result.single()
+            return record["post_id"] if record else None
+
+    def get_posts_by_user(self, user_id: str) -> List[dict]:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User {id: $user_id})-[:POSTED]->(p:Post)
+                RETURN p.id AS id, p.content AS content, p.timestamp AS timestamp
                 ORDER BY p.timestamp DESC
-            """,
-                (user_id,),
+                """,
+                user_id=user_id,
             )
             return [
-                {
-                    "id": row[0],
-                    "content": row[1],
-                    "timestamp": row[2],
-                    "username": row[3],
-                    "name": row[4],
-                }
-                for row in cursor.fetchall()
+                {"id": record["id"], "content": record["content"], "timestamp": record["timestamp"]}
+                for record in result
             ]
+
 
     def get_feed(self, user_id: int) -> List[dict]:
         with self._get_connection() as conn:
@@ -178,6 +178,9 @@ class Database:
                 (follower_id, followee_id),
             )
             return cursor.rowcount > 0
+        
+    def close(self):
+        self.driver.close()
 
 
 # ======================
@@ -185,7 +188,11 @@ class Database:
 # ======================
 app = Flask(__name__)
 app.secret_key = "your_secret_key_here"
-db = Database()
+password = os.environ.get("NEO4J_PASSWORD")
+uri = os.environ.get("NEO4J_URI")
+user = os.environ.get("NEO4J_USERNAME")
+
+db = Database(uri, user, password)
 
 # Sample data initialization
 with app.app_context():
@@ -215,7 +222,7 @@ def api_get_user_posts(user_id):
     return jsonify(db.get_posts_by_user(user_id))
 
 
-@app.route("/api/users/<int:user_id>/feed", methods=["GET"])
+@app.route("/api/users/<user_id>/feed", methods=["GET"])
 def api_get_user_feed(user_id):
     return jsonify(db.get_feed(user_id))
 
@@ -356,22 +363,5 @@ app.jinja_env.globals.update(
     
 
 if __name__ == "__main__":
-    
-    password = os.environ.get("NEO4J_PASSWORDI")
-    uri = os.environ.get("NEO4J_URI")
-    user = os.environ.get("NEO4J_USERNAME")
-    
-    db = Database(uri, user, password)
-
-    # Test 
-    user_id = db.create_user("david", "David Bach")
-    print("Created user with ID:", user_id)
-    
-    user = db.get_user(user_id)
-    print("Fetched user:", user)
-    
-    users = db.get_all_users()
-    print("All users:", users)
-    
-    # app.run(debug=True)
+    app.run(debug=True)
     
