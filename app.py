@@ -31,7 +31,7 @@ class Database:
             ''')
     
     def _get_connection(self):
-        return sqlite3.connect(self.db_name)
+        return self.driver.session()
     
     # User operations
     def create_user(self, username: str, name: str) -> int:
