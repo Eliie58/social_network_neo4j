@@ -26,24 +26,42 @@ class GraphDatabaseService:
 
     # User operations
     def create_user(self, username: str, name: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO users (username, name) VALUES (?, ?)', (username, name))
-            return cursor.lastrowid
-    
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                CREATE (u:User {username: $username, name: $name})
+                RETURN id(u) AS id
+                """,
+                username=username,
+                name=name
+            )
+            return result.single()["id"]
+
     def get_user(self, user_id: int) -> Optional[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users WHERE id = ?', (user_id,))
-            row = cursor.fetchone()
-            return {'id': row[0], 'username': row[1], 'name': row[2]} if row else None
-    
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User)
+                WHERE id(u) = $id
+                RETURN u.username AS username, u.name AS name
+                """,
+                id=user_id
+            )
+            record = result.single()
+            if record:
+                return {"id": user_id, "username": record["username"], "name": record["name"]}
+            return None
+
     def get_all_users(self) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users')
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
-    
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User)
+                RETURN id(u) AS id, u.username AS username, u.name AS name
+                """
+            )
+            return [{"id": r["id"], "username": r["username"], "name": r["name"]} for r in result]
+
     # Post operations
     def create_post(self, user_id: int, content: str) -> int:
         with self._get_connection() as conn:
