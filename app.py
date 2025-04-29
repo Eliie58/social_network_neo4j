@@ -53,24 +53,13 @@ class Database:
         with self.driver.session() as session:
             return [r["p"] for r in session.run(query, user_id=user_id)]
     
-    def get_feed(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT p.id, p.content, p.timestamp, u.username, u.name 
-                FROM posts p 
-                JOIN users u ON p.user_id = u.id
-                JOIN followers f ON p.user_id = f.followee_id
-                WHERE f.follower_id = ?
-                ORDER BY p.timestamp DESC
-            ''', (user_id,))
-            return [{
-                'id': row[0],
-                'content': row[1],
-                'timestamp': row[2],
-                'username': row[3],
-                'name': row[4]
-            } for row in cursor.fetchall()]
+    def get_feed(self, user_id):
+        query = (
+            "MATCH (u:User {id: $user_id})-[:FOLLOWS]->(f:User)-[:AUTHORED]->(p:Post) "
+            "RETURN p, f ORDER BY p.timestamp DESC"
+        )
+        with self.driver.session() as session:
+            return [ {"post": r["p"], "author": r["f"]} for r in session.run(query, user_id=user_id) ]
     
     # Follow operations
     def follow_user(self, follower_id, followee_id):
