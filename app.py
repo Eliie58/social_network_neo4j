@@ -136,42 +136,64 @@ class Database:
     
     # Follow operations
     def follow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            try:
-                conn.execute('INSERT INTO followers (follower_id, followee_id) VALUES (?, ?)', 
-                           (follower_id, followee_id))
-                return True
-            except sqlite3.IntegrityError:
-                return False
-    
-    def get_followers(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.follower_id = u.id
-                WHERE f.followee_id = ?
-            ''', (user_id,))
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
-    
-    def get_following(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.followee_id = u.id
-                WHERE f.follower_id = ?
-            ''', (user_id,))
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
+        with self._get_connection() as session:
+            result = session.run(
+                '''
+                MATCH (follower:User), (followee:User)
+                WHERE id(follower) = $follower_id AND id(followee) = $followee_id
+                MERGE (follower)-[:FOLLOWS]->(followee)
+                RETURN COUNT(*) > 0 AS success
+                ''',
+                follower_id=follower_id,
+                followee_id=followee_id
+            )
+            record = result.single()
+            return record["success"] if record else False
 
     def unfollow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM followers WHERE follower_id = ? AND followee_id = ?', 
-                        (follower_id, followee_id))
-            return cursor.rowcount > 0
+        with self._get_connection() as session:
+            result = session.run(
+                '''
+                MATCH (follower:User)-[r:FOLLOWS]->(followee:User)
+                WHERE id(follower) = $follower_id AND id(followee) = $followee_id
+                DELETE r
+                RETURN COUNT(r) > 0 AS success
+                ''',
+                follower_id=follower_id,
+                followee_id=followee_id
+            )
+            record = result.single()
+            return record["success"] if record else False
+
+    def get_followers(self, user_id: int) -> List[dict]:
+        with self._get_connection() as session:
+            result = session.run(
+                '''
+                MATCH (follower:User)-[:FOLLOWS]->(followee:User)
+                WHERE id(followee) = $user_id
+                RETURN id(follower) AS id, follower.username AS username, follower.name AS name
+                ''',
+                user_id=user_id
+            )
+            return [
+                {"id": record["id"], "username": record["username"], "name": record["name"]}
+                for record in result
+            ]
+
+    def get_following(self, user_id: int) -> List[dict]:
+        with self._get_connection() as session:
+            result = session.run(
+                '''
+                MATCH (follower:User)-[:FOLLOWS]->(followee:User)
+                WHERE id(follower) = $user_id
+                RETURN id(followee) AS id, followee.username AS username, followee.name AS name
+                ''',
+                user_id=user_id
+            )
+            return [
+                {"id": record["id"], "username": record["username"], "name": record["name"]}
+                for record in result
+            ]
 
 # ======================
 # Web Application
