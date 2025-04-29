@@ -281,4 +281,4 @@ def migrate(sqlite_path, neo4j_uri, neo4j_user, neo4j_pass):
     driver.close()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5050)
