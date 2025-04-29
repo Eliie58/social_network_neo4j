@@ -28,12 +28,17 @@ class Database:
 
     # User operations
     def create_user(self, username: str, name: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO users (username, name) VALUES (?, ?)", (username, name)
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                CREATE (u:User {id: randomUUID(), username: $username, name: $name})
+                RETURN u.id AS id
+                """,
+                username=username,
+                name=name,
             )
-            return cursor.lastrowid
+            record = result.single()
+            return record["id"] if record else None
 
     def get_user(self, user_id: int) -> Optional[dict]:
         with self._get_connection() as conn:
