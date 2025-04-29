@@ -7,7 +7,7 @@ from neo4j import GraphDatabase
 from dotenv import load_dotenv
 import os
 
-
+load_dotenv()
 
 # ======================
 # Database Access Layer
@@ -15,7 +15,7 @@ import os
 
 
 class Database:
-    def __init__(self, uri, user, password):
+    def __init__(self, uri="neo4j+s://87ede72a.databases.neo4j.io", user="neo4j", password="G_WCNx7pwKrtowFHpmrarOinJLWT3FMod3bLwQG0CKc"):
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self.create_constraints()
 
@@ -40,22 +40,31 @@ class Database:
             record = result.single()
             return record["id"] if record else None
 
-    def get_user(self, user_id: int) -> Optional[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT id, username, name FROM users WHERE id = ?", (user_id,)
+    def get_user(self, user_id: str) -> Optional[dict]:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User {id: $user_id})
+                RETURN u.id AS id, u.username AS username, u.name AS name
+                """,
+                user_id=user_id,
             )
-            row = cursor.fetchone()
-            return {"id": row[0], "username": row[1], "name": row[2]} if row else None
+            record = result.single()
+            return {"id": record["id"], "username": record["username"], "name": record["name"]} if record else None
+
 
     def get_all_users(self) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, username, name FROM users")
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User)
+                RETURN u.id AS id, u.username AS username, u.name AS name
+                ORDER BY u.username
+                """
+            )
             return [
-                {"id": row[0], "username": row[1], "name": row[2]}
-                for row in cursor.fetchall()
+                {"id": record["id"], "username": record["username"], "name": record["name"]}
+                for record in result
             ]
 
     # Post operations
@@ -144,7 +153,7 @@ class Database:
                 for row in cursor.fetchall()
             ]
 
-    def get_following(self, user_id: int) -> List[dict]:
+    def get_following(self, user_id) -> List[dict]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -195,13 +204,13 @@ def api_get_users():
     return jsonify(db.get_all_users())
 
 
-@app.route("/api/users/<int:user_id>", methods=["GET"])
+@app.route("/api/users/<user_id>", methods=["GET"])
 def api_get_user(user_id):
     user = db.get_user(user_id)
     return jsonify(user) if user else ("User not found", 404)
 
 
-@app.route("/api/users/<int:user_id>/posts", methods=["GET"])
+@app.route("/api/users/<user_id>/posts", methods=["GET"])
 def api_get_user_posts(user_id):
     return jsonify(db.get_posts_by_user(user_id))
 
@@ -211,12 +220,12 @@ def api_get_user_feed(user_id):
     return jsonify(db.get_feed(user_id))
 
 
-@app.route("/api/users/<int:user_id>/followers", methods=["GET"])
+@app.route("/api/users/<user_id>/followers", methods=["GET"])
 def api_get_user_followers(user_id):
     return jsonify(db.get_followers(user_id))
 
 
-@app.route("/api/users/<int:user_id>/following", methods=["GET"])
+@app.route("/api/users/<user_id>/following", methods=["GET"])
 def api_get_user_following(user_id):
     return jsonify(db.get_following(user_id))
 
@@ -247,7 +256,7 @@ def home():
     return render_template("index.html", users=users, current_user=current_user)
 
 
-@app.route("/user/<int:user_id>")
+@app.route("/user/<user_id>")
 def user_profile(user_id):
     user = db.get_user(user_id)
     if not user:
@@ -278,7 +287,7 @@ def user_profile(user_id):
     )
 
 
-@app.route("/user/<int:user_id>/feed")
+@app.route("/user/<user_id>/feed")
 def user_feed(user_id):
     user = db.get_user(user_id)
     feed = db.get_feed(user_id)
@@ -293,7 +302,7 @@ def create_post():
     return redirect(url_for("user_profile", user_id=user_id))
 
 
-@app.route("/login/<int:user_id>")
+@app.route("/login/<user_id>")
 def login(user_id):
     session["user_id"] = user_id
     return redirect(url_for("home"))
@@ -347,5 +356,22 @@ app.jinja_env.globals.update(
     
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    
+    password = os.environ.get("NEO4J_PASSWORDI")
+    uri = os.environ.get("NEO4J_URI")
+    user = os.environ.get("NEO4J_USERNAME")
+    
+    db = Database(uri, user, password)
+
+    # Test 
+    user_id = db.create_user("david", "David Bach")
+    print("Created user with ID:", user_id)
+    
+    user = db.get_user(user_id)
+    print("Fetched user:", user)
+    
+    users = db.get_all_users()
+    print("All users:", users)
+    
+    # app.run(debug=True)
     
