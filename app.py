@@ -252,7 +252,7 @@ def user_feed(user_id):
 
 @app.route('/create_post', methods=['POST'])
 def create_post():
-    user_id = int(request.form['user_id'])
+    user_id = request.form['user_id']
     content = request.form['content']
     db.create_post(user_id, content)
     return redirect(url_for('user_profile', user_id=user_id))
@@ -269,8 +269,8 @@ def logout():
 
 @app.route('/follow', methods=['POST'])
 def follow():
-    follower_id = int(request.form['follower_id'])
-    followee_id = int(request.form['followee_id'])
+    follower_id = request.form['follower_id']
+    followee_id = request.form['followee_id']
     
     # Check if the user is already following
     following = db.get_following(follower_id)
