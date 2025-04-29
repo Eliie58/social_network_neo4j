@@ -4,9 +4,8 @@
 Transform the existing SQLite-based social network application to use Neo4j graph database while maintaining all existing functionality.
 
 ## Prerequisites
-1. Install Neo4j Desktop (https://neo4j.com/download/) or use Neo4j AuraDB (cloud)
-2. Basic understanding of Cypher query language
-3. Python 3.8+ installed
+1 Basic understanding of Cypher query language
+2. Python 3.8+ installed
 
 ## Workflow Setup
 1. **Fork the Repository**
