@@ -64,28 +64,39 @@ class GraphDatabaseService:
 
     # Post operations
     def create_post(self, user_id: int, content: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO posts (user_id, content) VALUES (?, ?)', (user_id, content))
-            return cursor.lastrowid
-    
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User)
+                WHERE id(u) = $user_id
+                CREATE (u)-[:POSTED]->(p:Post {content: $content, timestamp: datetime()})
+                RETURN id(p) AS id
+                """,
+                user_id=user_id,
+                content=content
+            )
+            return result.single()["id"]
+
     def get_posts_by_user(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT p.id, p.content, p.timestamp, u.username, u.name 
-                FROM posts p JOIN users u ON p.user_id = u.id 
-                WHERE p.user_id = ?
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User)-[:POSTED]->(p:Post)
+                WHERE id(u) = $user_id
+                RETURN id(p) AS id, p.content AS content, p.timestamp AS timestamp,
+                       u.username AS username, u.name AS name
                 ORDER BY p.timestamp DESC
-            ''', (user_id,))
+                """,
+                user_id=user_id
+            )
             return [{
-                'id': row[0],
-                'content': row[1],
-                'timestamp': row[2],
-                'username': row[3],
-                'name': row[4]
-            } for row in cursor.fetchall()]
-    
+                "id": r["id"],
+                "content": r["content"],
+                "timestamp": r["timestamp"],
+                "username": r["username"],
+                "name": r["name"]
+            } for r in result]
+
     def get_feed(self, user_id: int) -> List[dict]:
         with self._get_connection() as conn:
             cursor = conn.cursor()
