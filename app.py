@@ -3,11 +3,18 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 import sqlite3
 from dataclasses import dataclass
 from typing import List, Optional
+from neo4j import GraphDatabase
+import os
+
+load_dotenv()
+
 
 
 # ======================
 # Database Access Layer
 # ======================
+
+
 class Database:
     def __init__(self, db_name="social_network.db"):
         self.db_name = db_name
@@ -364,5 +371,22 @@ app.jinja_env.globals.update(
     ),
 )
 
+
+
+
+def create_neo4j_constraints(uri, user, password):
+    driver = GraphDatabase.driver(uri, auth=(user, password))
+    with driver.session() as session:
+        session.run("CREATE CONSTRAINT unique_user_id IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE;")
+        session.run("CREATE CONSTRAINT unique_username IF NOT EXISTS FOR (u:User) REQUIRE u.username IS UNIQUE;")
+        session.run("CREATE CONSTRAINT unique_post_id IF NOT EXISTS FOR (p:Post) REQUIRE p.id IS UNIQUE;")
+    driver.close()
+    
+
 if __name__ == "__main__":
+    uri = os.getenv("NEO4J_URI")
+    user = os.getenv("NEO4J_USER")
+    password = os.getenv("NEO4J_PASSWORD")
+    create_neo4j_constraints(uri, user, password)
     app.run(debug=True)
+    
