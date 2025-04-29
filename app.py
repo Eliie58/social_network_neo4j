@@ -1,7 +1,6 @@
 # social_network.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import sqlite3
-
 # from dataclasses import dataclass
 from typing import List, Optional
 from neo4j import GraphDatabase
@@ -51,8 +50,7 @@ class Database:
                 CREATE (u:User {username: $username, name: $name, id: randomUUID()})
                 RETURN u.id AS id
                 """,
-                username=username,
-                name=name,
+                username=username, name=name
             )
             record = result.single()
             return record["id"] if record else None
@@ -65,7 +63,7 @@ class Database:
                 WHERE u.id = $user_id
                 RETURN u.id AS id, u.username AS username, u.name AS name
                 """,
-                user_id=user_id,
+                user_id=user_id
             )
             record = result.single()
             return dict(record) if record else None
@@ -94,8 +92,7 @@ class Database:
                 CREATE (u)-[:CREATED]->(p)
                 RETURN p.id AS id
                 """,
-                user_id=user_id,
-                content=content,
+                user_id=user_id, content=content
             )
             record = result.single()
             return record["id"] if record else None
@@ -109,7 +106,7 @@ class Database:
                        u.username AS username, u.name AS name
                 ORDER BY p.timestamp DESC
                 """,
-                user_id=user_id,
+                user_id=user_id
             )
             return [dict(record) for record in result]
 
@@ -139,59 +136,55 @@ class Database:
             ]
 
     # Follow operations
-    def follow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
+    def follow_user(self, follower_id: str, followee_id: str) -> bool:
+        with self.driver.session() as session:
             try:
-                conn.execute(
-                    "INSERT INTO followers (follower_id, followee_id) VALUES (?, ?)",
-                    (follower_id, followee_id),
+                result = session.run(
+                    """
+                    MATCH (follower:User {id: $follower_id})
+                    MATCH (followee:User {id: $followee_id})
+                    MERGE (follower)-[:FOLLOWS]->(followee)
+                    RETURN true AS success
+                    """,
+                    follower_id=follower_id, followee_id=followee_id
                 )
-                return True
-            except sqlite3.IntegrityError:
+                return bool(result.single()["success"]) if result.single() else False
+            except Exception:
                 return False
 
-    def get_followers(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
+    def get_followers(self, user_id: str) -> List[dict]:
+        with self.driver.session() as session:
+            result = session.run(
                 """
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.follower_id = u.id
-                WHERE f.followee_id = ?
-            """,
-                (user_id,),
+                MATCH (follower:User)-[:FOLLOWS]->(user:User {id: $user_id})
+                RETURN follower.id AS id, follower.username AS username, follower.name AS name
+                """,
+                user_id=user_id
             )
-            return [
-                {"id": row[0], "username": row[1], "name": row[2]}
-                for row in cursor.fetchall()
-            ]
+            return [dict(record) for record in result]
 
-    def get_following(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
+    def get_following(self, user_id: str) -> List[dict]:
+        with self.driver.session() as session:
+            result = session.run(
                 """
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.followee_id = u.id
-                WHERE f.follower_id = ?
-            """,
-                (user_id,),
+                MATCH (user:User {id: $user_id})-[:FOLLOWS]->(followee:User)
+                RETURN followee.id AS id, followee.username AS username, followee.name AS name
+                """,
+                user_id=user_id
             )
-            return [
-                {"id": row[0], "username": row[1], "name": row[2]}
-                for row in cursor.fetchall()
-            ]
+            return [dict(record) for record in result]
 
-    def unfollow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "DELETE FROM followers WHERE follower_id = ? AND followee_id = ?",
-                (follower_id, followee_id),
+    def unfollow_user(self, follower_id: str, followee_id: str) -> bool:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (follower:User {id: $follower_id})-[r:FOLLOWS]->(followee:User {id: $followee_id})
+                DELETE r
+                RETURN count(r) > 0 AS success
+                """,
+                follower_id=follower_id, followee_id=followee_id
             )
-            return cursor.rowcount > 0
+            return bool(result.single()["success"]) if result.single() else False
 
 
 # ======================
