@@ -1,4 +1,4 @@
-#!/Users/eman/Desktop/social_network_neo4j/env/bin/python3.13
+#!/Users/eman/Desktop/social_network_neo4j/env/bin/python3.11
 # -*- coding: utf-8 -*-
 import re
 import sys
