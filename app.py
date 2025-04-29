@@ -14,40 +14,7 @@ class Database:
 
     def close(self):
         self.driver.close()
-    
-    def _init_db(self):
-        with self._get_connection() as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    name TEXT NOT NULL
-                )
-            ''')
-            
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS posts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    content TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(user_id) REFERENCES users(id)
-                )
-            ''')
-            
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS followers (
-                    follower_id INTEGER NOT NULL,
-                    followee_id INTEGER NOT NULL,
-                    PRIMARY KEY(follower_id, followee_id),
-                    FOREIGN KEY(follower_id) REFERENCES users(id),
-                    FOREIGN KEY(followee_id) REFERENCES users(id)
-                )
-            ''')
-    
-    def _get_connection(self):
-        return sqlite3.connect(self.db_name)
-    
+     
     # User operations
     def create_user(self, username: str, name: str) -> int:
         with self._get_connection() as conn:
