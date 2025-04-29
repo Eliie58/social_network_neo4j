@@ -11,7 +11,9 @@ import os
 # Database Access Layer
 # ======================
 class GraphDatabaseService:
-
+    def __init__(self, uri, user, password):
+        self.driver = GraphDatabase.driver(uri, auth=(user, password))
+        self._create_constraints()
 
     def _create_constraints(self):
         queries = [
@@ -127,6 +129,14 @@ class GraphDatabaseService:
 # ======================
 # Web Application
 # ======================
+app = Flask(__name__)
+load_dotenv()
+
+db = GraphDatabaseService(
+    uri=os.getenv("NEO4J_URI"),
+    user=os.getenv("NEO4J_USER"),
+    password=os.getenv("NEO4J_PASSWORD")
+)
 
 
 # Sample data initialization
