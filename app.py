@@ -3,47 +3,63 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 import sqlite3
 from dataclasses import dataclass
 from typing import List, Optional
+from neo4j import GraphDatabase
 
 # ======================
 # Database Access Layer
 # ======================
 class Database:
-    def __init__(self, db_name='social_network.db'):
-        self.db_name = db_name
+    # def __init__(self, db_name='social_network.db'):
+    #     self.db_name = db_name
+    #     self._init_db()
+    
+    def __init__(self, uri="neo4j+s://169c8373.databases.neo4j.io", user="neo4j", password="nEW3QFAjKE1Kna6svu83NrCSyfSfiscT-I9GVD1qXUQ"):
+        self.driver = GraphDatabase.driver(uri, auth=(user, password))
         self._init_db()
+        
+    # def _init_db(self):
+    #     with self._get_connection() as conn:
+    #         conn.execute('''
+    #             CREATE TABLE IF NOT EXISTS users (
+    #                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #                 username TEXT UNIQUE NOT NULL,
+    #                 name TEXT NOT NULL
+    #             )
+    #         ''')
+            
+    #         conn.execute('''
+    #             CREATE TABLE IF NOT EXISTS posts (
+    #                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+    #                 user_id INTEGER NOT NULL,
+    #                 content TEXT NOT NULL,
+    #                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    #                 FOREIGN KEY(user_id) REFERENCES users(id)
+    #             )
+    #         ''')
+            
+    #         conn.execute('''
+    #             CREATE TABLE IF NOT EXISTS followers (
+    #                 follower_id INTEGER NOT NULL,
+    #                 followee_id INTEGER NOT NULL,
+    #                 PRIMARY KEY(follower_id, followee_id),
+    #                 FOREIGN KEY(follower_id) REFERENCES users(id),
+    #                 FOREIGN KEY(followee_id) REFERENCES users(id)
+    #             )
+    #         ''')
     
     def _init_db(self):
-        with self._get_connection() as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    name TEXT NOT NULL
-                )
-            ''')
-            
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS posts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    content TEXT NOT NULL,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY(user_id) REFERENCES users(id)
-                )
-            ''')
-            
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS followers (
-                    follower_id INTEGER NOT NULL,
-                    followee_id INTEGER NOT NULL,
-                    PRIMARY KEY(follower_id, followee_id),
-                    FOREIGN KEY(follower_id) REFERENCES users(id),
-                    FOREIGN KEY(followee_id) REFERENCES users(id)
-                )
-            ''')
+        with self.driver.session() as session:
+            session.run("""
+                CREATE CONSTRAINT unique_user_id IF NOT EXISTS 
+                FOR (u:User) REQUIRE u.id IS UNIQUE
+            """)
+            session.run("""
+                CREATE CONSTRAINT unique_username IF NOT EXISTS 
+                FOR (u:User) REQUIRE u.username IS UNIQUE
+            """)
     
-    def _get_connection(self):
-        return sqlite3.connect(self.db_name)
+    # def _get_connection(self):
+    #     return sqlite3.connect(self.db_name)
     
     # User operations
     def create_user(self, username: str, name: str) -> int:
