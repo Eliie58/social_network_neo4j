@@ -1,3 +1,4 @@
 social_metwork.db
 .env/
 .env
+*.txt
