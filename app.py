@@ -25,11 +25,6 @@ class Database:
         with self.driver.session() as session:
             session.run("""
                 CREATE CONSTRAINT unique_user_id IF NOT EXISTS 
-                FOR (u:User) REQUIRE u.id IS UNIQUE
-            """)
-            
-            session.run("""
-                CREATE CONSTRAINT unique_username IF NOT EXISTS 
                 FOR (u:User) REQUIRE u.username IS UNIQUE
             """)
     
@@ -38,20 +33,20 @@ class Database:
         self.driver.close()
     
     # User operations
-    def create_user(self, username: str, name: str) -> int:
+    def create_user(self, username: str, name: str) -> str:
         with self.driver.session() as session:
             result = session.run("""
                 CREATE (u:User {username: $username, name: $name})
-                RETURN id(u) as id
+                RETURN elementId(u) as id
             """, username=username, name=name)
             return result.single()["id"]
     
-    def get_user(self, user_id: int) -> Optional[dict]:
+    def get_user(self, user_id: str) -> Optional[dict]:
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (u:User)
-                WHERE id(u) = $user_id
-                RETURN id(u) as id, u.username as username, u.name as name
+                WHERE elementId(u) = $user_id
+                RETURN elementId(u) as id, u.username as username, u.name as name
             """, user_id=user_id)
             record = result.single()
             return {
@@ -64,7 +59,7 @@ class Database:
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (u:User)
-                RETURN id(u) as id, u.username as username, u.name as name
+                RETURN elementId(u) as id, u.username as username, u.name as name
             """)
             return [{
                 "id": record["id"],
@@ -73,23 +68,23 @@ class Database:
             } for record in result]
     
     # Post operations
-    def create_post(self, user_id: int, content: str) -> int:
+    def create_post(self, user_id: str, content: str) -> str:
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (u:User)
-                WHERE id(u) = $user_id
+                WHERE elementId(u) = $user_id
                 CREATE (p:Post {content: $content, timestamp: datetime()})
                 CREATE (u)-[:POSTED]->(p)
-                RETURN id(p) as id
+                RETURN elementId(p) as id
             """, user_id=user_id, content=content)
             return result.single()["id"]
     
-    def get_posts_by_user(self, user_id: int) -> List[dict]:
+    def get_posts_by_user(self, user_id: str) -> List[dict]:
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (u:User)-[:POSTED]->(p:Post)
-                WHERE id(u) = $user_id
-                RETURN id(p) as id, p.content as content, p.timestamp as timestamp,
+                WHERE elementId(u) = $user_id
+                RETURN elementId(p) as id, p.content as content, p.timestamp as timestamp,
                        u.username as username, u.name as name
                 ORDER BY p.timestamp DESC
             """, user_id=user_id)
@@ -101,12 +96,14 @@ class Database:
                 "name": record["name"]
             } for record in result]
     
-    def get_feed(self, user_id: int) -> List[dict]:
+    def get_feed(self, user_id: str) -> List[dict]:
         with self.driver.session() as session:
             result = session.run("""
-                MATCH (me:User)-[:FOLLOWS]->(u:User)-[:POSTED]->(p:Post)
-                WHERE id(me) = $user_id
-                RETURN id(p) as id, p.content as content, p.timestamp as timestamp,
+                MATCH (me:User)-[:FOLLOWS]->(u:User)
+                WHERE elementId(me) = $user_id
+                WITH u
+                MATCH (u)-[:POSTED]->(p:Post)
+                RETURN elementId(p) as id, p.content as content, p.timestamp as timestamp,
                        u.username as username, u.name as name
                 ORDER BY p.timestamp DESC
             """, user_id=user_id)
@@ -119,12 +116,12 @@ class Database:
             } for record in result]
     
     # Follow operations
-    def follow_user(self, follower_id: int, followee_id: int) -> bool:
+    def follow_user(self, follower_id: str, followee_id: str) -> bool:
         with self.driver.session() as session:
             try:
                 result = session.run("""
                     MATCH (follower:User), (followee:User)
-                    WHERE id(follower) = $follower_id AND id(followee) = $followee_id
+                    WHERE elementId(follower) = $follower_id AND elementId(followee) = $followee_id
                     MERGE (follower)-[r:FOLLOWS]->(followee)
                     RETURN r
                 """, follower_id=follower_id, followee_id=followee_id)
@@ -132,12 +129,12 @@ class Database:
             except Exception:
                 return False
     
-    def get_followers(self, user_id: int) -> List[dict]:
+    def get_followers(self, user_id: str) -> List[dict]:
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (follower:User)-[:FOLLOWS]->(u:User)
-                WHERE id(u) = $user_id
-                RETURN id(follower) as id, follower.username as username, follower.name as name
+                WHERE elementId(u) = $user_id
+                RETURN elementId(follower) as id, follower.username as username, follower.name as name
             """, user_id=user_id)
             return [{
                 "id": record["id"],
@@ -145,12 +142,12 @@ class Database:
                 "name": record["name"]
             } for record in result]
     
-    def get_following(self, user_id: int) -> List[dict]:
+    def get_following(self, user_id: str) -> List[dict]:
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (u:User)-[:FOLLOWS]->(followee:User)
-                WHERE id(u) = $user_id
-                RETURN id(followee) as id, followee.username as username, followee.name as name
+                WHERE elementId(u) = $user_id
+                RETURN elementId(followee) as id, followee.username as username, followee.name as name
             """, user_id=user_id)
             return [{
                 "id": record["id"],
@@ -158,11 +155,11 @@ class Database:
                 "name": record["name"]
             } for record in result]
 
-    def unfollow_user(self, follower_id: int, followee_id: int) -> bool:
+    def unfollow_user(self, follower_id: str, followee_id: str) -> bool:
         with self.driver.session() as session:
             result = session.run("""
                 MATCH (follower:User)-[r:FOLLOWS]->(followee:User)
-                WHERE id(follower) = $follower_id AND id(followee) = $followee_id
+                WHERE elementId(follower) = $follower_id AND elementId(followee) = $followee_id
                 DELETE r
                 RETURN count(r) as deleted
             """, follower_id=follower_id, followee_id=followee_id)
@@ -190,24 +187,24 @@ with app.app_context():
 def api_get_users():
     return jsonify(db.get_all_users())
 
-@app.route('/api/users/<int:user_id>', methods=['GET'])
+@app.route('/api/users/<string:user_id>', methods=['GET'])
 def api_get_user(user_id):
     user = db.get_user(user_id)
     return jsonify(user) if user else ('User not found', 404)
 
-@app.route('/api/users/<int:user_id>/posts', methods=['GET'])
+@app.route('/api/users/<string:user_id>/posts', methods=['GET'])
 def api_get_user_posts(user_id):
     return jsonify(db.get_posts_by_user(user_id))
 
-@app.route('/api/users/<int:user_id>/feed', methods=['GET'])
+@app.route('/api/users/<string:user_id>/feed', methods=['GET'])
 def api_get_user_feed(user_id):
     return jsonify(db.get_feed(user_id))
 
-@app.route('/api/users/<int:user_id>/followers', methods=['GET'])
+@app.route('/api/users/<string:user_id>/followers', methods=['GET'])
 def api_get_user_followers(user_id):
     return jsonify(db.get_followers(user_id))
 
-@app.route('/api/users/<int:user_id>/following', methods=['GET'])
+@app.route('/api/users/<string:user_id>/following', methods=['GET'])
 def api_get_user_following(user_id):
     return jsonify(db.get_following(user_id))
 
@@ -234,7 +231,7 @@ def home():
         current_user = db.get_user(session['user_id'])
     return render_template('index.html', users=users, current_user=current_user)
 
-@app.route('/user/<int:user_id>')
+@app.route('/user/<string:user_id>')
 def user_profile(user_id):
     user = db.get_user(user_id)
     if not user:
@@ -262,7 +259,7 @@ def user_profile(user_id):
                          current_user=current_user,
                          is_following=is_following)
 
-@app.route('/user/<int:user_id>/feed')
+@app.route('/user/<string:user_id>/feed')
 def user_feed(user_id):
     user = db.get_user(user_id)
     feed = db.get_feed(user_id)
@@ -270,12 +267,12 @@ def user_feed(user_id):
 
 @app.route('/create_post', methods=['POST'])
 def create_post():
-    user_id = int(request.form['user_id'])
+    user_id = request.form['user_id']
     content = request.form['content']
     db.create_post(user_id, content)
     return redirect(url_for('user_profile', user_id=user_id))
 
-@app.route('/login/<int:user_id>')
+@app.route('/login/<string:user_id>')
 def login(user_id):
     session['user_id'] = user_id
     return redirect(url_for('home'))
@@ -287,8 +284,8 @@ def logout():
 
 @app.route('/follow', methods=['POST'])
 def follow():
-    follower_id = int(request.form['follower_id'])
-    followee_id = int(request.form['followee_id'])
+    follower_id = request.form['follower_id']
+    followee_id = request.form['followee_id']
     
     # Check if the user is already following
     following = db.get_following(follower_id)
