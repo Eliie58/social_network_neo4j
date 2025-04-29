@@ -104,43 +104,52 @@ class Database:
             } for record in result]
 
     # Follow operations
-    def follow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            try:
-                conn.execute('INSERT INTO followers (follower_id, followee_id) VALUES (?, ?)', 
-                           (follower_id, followee_id))
-                return True
-            except sqlite3.IntegrityError:
-                return False
+    def follow_user(self, follower_id: str, followee_id: str) -> bool:
+        with self.driver.session() as session:
+            session.run(
+                """
+                MATCH (follower:User {id: $follower_id}), (followee:User {id: $followee_id})
+                MERGE (follower)-[:FOLLOWS]->(followee)
+                """,
+                {"follower_id": follower_id, "followee_id": followee_id}
+            )
+        return True
     
-    def get_followers(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.follower_id = u.id
-                WHERE f.followee_id = ?
-            ''', (user_id,))
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
-    
-    def get_following(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.followee_id = u.id
-                WHERE f.follower_id = ?
-            ''', (user_id,))
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
+    def get_followers(self, user_id: str) -> List[dict]:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (follower:User)-[:FOLLOWS]->(followee:User {id: $user_id})
+                RETURN follower.id AS id, follower.username AS username, follower.name AS name
+                """,
+                {"user_id": user_id}
+            )
+            return [{'id': record['id'], 'username': record['username'], 'name': record['name']} for record in result]
 
-    def unfollow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM followers WHERE follower_id = ? AND followee_id = ?', 
-                        (follower_id, followee_id))
-            return cursor.rowcount > 0
+    def get_following(self, user_id: str) -> List[dict]:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (follower:User {id: $user_id})-[:FOLLOWS]->(followee:User)
+                RETURN followee.id AS id, followee.username AS username, followee.name AS name
+                """,
+                {"user_id": user_id}
+            )
+            return [{'id': record['id'], 'username': record['username'], 'name': record['name']} for record in result]
+
+
+    def unfollow_user(self, follower_id: str, followee_id: str) -> bool:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (follower:User {id: $follower_id})-[r:FOLLOWS]->(followee:User {id: $followee_id})
+                DELETE r
+                RETURN COUNT(r) AS deleted_count
+                """,
+                {"follower_id": follower_id, "followee_id": followee_id}
+            )
+            deleted_count = result.single()["deleted_count"]
+            return deleted_count > 0
 
 # ======================
 # Web Application
@@ -164,24 +173,24 @@ with app.app_context():
 def api_get_users():
     return jsonify(db.get_all_users())
 
-@app.route('/api/users/<int:user_id>', methods=['GET'])
+@app.route('/api/users/<string:user_id>', methods=['GET'])
 def api_get_user(user_id):
     user = db.get_user(user_id)
     return jsonify(user) if user else ('User not found', 404)
 
-@app.route('/api/users/<int:user_id>/posts', methods=['GET'])
+@app.route('/api/users/<string:user_id>/posts', methods=['GET'])
 def api_get_user_posts(user_id):
     return jsonify(db.get_posts_by_user(user_id))
 
-@app.route('/api/users/<int:user_id>/feed', methods=['GET'])
+@app.route('/api/users/<string:user_id>/feed', methods=['GET'])
 def api_get_user_feed(user_id):
     return jsonify(db.get_feed(user_id))
 
-@app.route('/api/users/<int:user_id>/followers', methods=['GET'])
+@app.route('/api/users/<string:user_id>/followers', methods=['GET'])
 def api_get_user_followers(user_id):
     return jsonify(db.get_followers(user_id))
 
-@app.route('/api/users/<int:user_id>/following', methods=['GET'])
+@app.route('/api/users/<string:user_id>/following', methods=['GET'])
 def api_get_user_following(user_id):
     return jsonify(db.get_following(user_id))
 
@@ -208,7 +217,7 @@ def home():
         current_user = db.get_user(session['user_id'])
     return render_template('index.html', users=users, current_user=current_user)
 
-@app.route('/user/<int:user_id>')
+@app.route('/user/<string:user_id>')
 def user_profile(user_id):
     user = db.get_user(user_id)
     if not user:
@@ -236,7 +245,7 @@ def user_profile(user_id):
                          current_user=current_user,
                          is_following=is_following)
 
-@app.route('/user/<int:user_id>/feed')
+@app.route('/user/<string:user_id>/feed')
 def user_feed(user_id):
     user = db.get_user(user_id)
     feed = db.get_feed(user_id)
@@ -249,7 +258,7 @@ def create_post():
     db.create_post(user_id, content)
     return redirect(url_for('user_profile', user_id=user_id))
 
-@app.route('/login/<int:user_id>')
+@app.route('/login/<string:user_id>')
 def login(user_id):
     session['user_id'] = user_id
     return redirect(url_for('home'))
