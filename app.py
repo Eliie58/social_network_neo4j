@@ -6,7 +6,7 @@ from typing import List, Optional
 # Database Access Layer (Neo4j)
 # ======================
 class Database:
-    def __init__(self, uri='bolt://localhost:7687', user='neo4j', password='hypothesis001'):
+    def __init__(self, uri='bolt://localhost:7687', user='neo4j', password='admin123'):
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
 
     def close(self):
@@ -38,7 +38,9 @@ class Database:
 
     def get_all_users(self) -> List[dict]:
         with self.driver.session() as session:
-            result = session.run("MATCH (u:User) RETURN id(u) AS id, u.username AS username, u.name AS name")
+            result = session.run(
+                "MATCH (u:User) RETURN id(u) AS id, u.username AS username, u.name AS name"
+            )
             return [dict(record) for record in result]
 
     # Post operations
@@ -115,7 +117,6 @@ class Database:
                 user_id=user_id
             )
             return [dict(record) for record in result]
-
 
 # ======================
 # Web Application
@@ -248,4 +249,4 @@ def follow():
     return redirect(url_for('user_profile', user_id=followee_id))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5001)
