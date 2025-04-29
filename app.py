@@ -125,59 +125,64 @@ class Database:
             ]
 
     # Follow operations
-    def follow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            try:
-                conn.execute(
-                    "INSERT INTO followers (follower_id, followee_id) VALUES (?, ?)",
-                    (follower_id, followee_id),
-                )
-                return True
-            except sqlite3.IntegrityError:
-                return False
-
-    def get_followers(self, user_id: int) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
+    def follow_user(self, follower_id: str, followee_id: str) -> bool:
+        with self.driver.session() as session:
+            result = session.run(
                 """
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.follower_id = u.id
-                WHERE f.followee_id = ?
-            """,
-                (user_id,),
+                MATCH (follower:User {id: $follower_id}), (followee:User {id: $followee_id})
+                MERGE (follower)-[:FOLLOWS]->(followee)
+                RETURN follower, followee
+                """,
+                follower_id=follower_id,
+                followee_id=followee_id,
+            )
+            return result.single() is not None
+
+
+    def get_followers(self, user_id: str) -> List[dict]:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (follower:User)-[:FOLLOWS]->(u:User {id: $user_id})
+                RETURN follower.id AS id, follower.username AS username, follower.name AS name
+                """,
+                user_id=user_id,
             )
             return [
-                {"id": row[0], "username": row[1], "name": row[2]}
-                for row in cursor.fetchall()
+                {"id": record["id"], "username": record["username"], "name": record["name"]}
+                for record in result
             ]
 
-    def get_following(self, user_id) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
+
+    def get_following(self, user_id: str) -> List[dict]:
+        with self.driver.session() as session:
+            result = session.run(
                 """
-                SELECT u.id, u.username, u.name 
-                FROM followers f 
-                JOIN users u ON f.followee_id = u.id
-                WHERE f.follower_id = ?
-            """,
-                (user_id,),
+                MATCH (u:User {id: $user_id})-[:FOLLOWS]->(followee:User)
+                RETURN followee.id AS id, followee.username AS username, followee.name AS name
+                """,
+                user_id=user_id,
             )
             return [
-                {"id": row[0], "username": row[1], "name": row[2]}
-                for row in cursor.fetchall()
+                {"id": record["id"], "username": record["username"], "name": record["name"]}
+                for record in result
             ]
 
-    def unfollow_user(self, follower_id: int, followee_id: int) -> bool:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "DELETE FROM followers WHERE follower_id = ? AND followee_id = ?",
-                (follower_id, followee_id),
+
+    def unfollow_user(self, follower_id: str, followee_id: str) -> bool:
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (follower:User {id: $follower_id})-[r:FOLLOWS]->(followee:User {id: $followee_id})
+                DELETE r
+                RETURN COUNT(r) AS deleted_count
+                """,
+                follower_id=follower_id,
+                followee_id=followee_id,
             )
-            return cursor.rowcount > 0
+            record = result.single()
+            return record["deleted_count"] > 0 if record else False
+
         
     def close(self):
         self.driver.close()
@@ -359,8 +364,6 @@ app.jinja_env.globals.update(
     ),
 )
 
-
-    
 
 if __name__ == "__main__":
     app.run(debug=True)
