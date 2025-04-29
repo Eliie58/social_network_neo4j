@@ -1,3 +1,7 @@
-social_metwork.db
+social_network.db
 .env/
 .env
+data/
+*.log
+__pycache__/
+*.pyc
