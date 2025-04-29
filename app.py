@@ -15,8 +15,18 @@ load_dotenv()
 # Database Access Layer
 # ======================
 class Database:
-    def __init__(self, db_name='social_network.db'):
-        self.db_name = db_name
+    def __init__(
+        self,
+        uri=None,
+        username=None,
+        password=None,
+    ):
+        self.uri = uri or os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        self.username = username or os.getenv("NEO4J_USERNAME", "neo4j")
+        self.password = password or os.getenv("NEO4J_PASSWORD", "")
+        self.driver = GraphDatabase.driver(
+            self.uri, auth=(self.username, self.password)
+        )
         self._init_db()
 
     def _init_db(self):
