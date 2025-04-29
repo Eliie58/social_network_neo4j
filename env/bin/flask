@@ -1,4 +1,4 @@
-#!/home/elie/twitter/env/bin/python3
+#!/Users/natthanicha/Documents/uni/S4/nosql/S4-Nosql-exam-290425/env/bin/python3.13
 # -*- coding: utf-8 -*-
 import re
 import sys

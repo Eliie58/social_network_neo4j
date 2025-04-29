@@ -89,10 +89,14 @@ class Database:
         with self.driver.session() as session:
             result = session.run(
                 """
-                MATCH (follower:User {id: $user_id})-[:FOLLOWS]->(followee:User)-[:POSTED]->(p:Post)
-                RETURN p.id AS id, p.content AS content, p.timestamp AS timestamp, followee.username AS username, followee.name AS name
+                MATCH (u:User)-[:POSTED]->(p:Post)
+                WHERE u.id = $user_id OR (EXISTS {
+                    MATCH (follower:User {id: $user_id})-[:FOLLOWS]->(u)
+                })
+                RETURN p.id AS id, p.content AS content, p.timestamp AS timestamp, u.username AS username, u.name AS name
                 ORDER BY p.timestamp DESC
-                """, {"user_id": user_id}
+                """,
+                {"user_id": user_id}
             )
             return [{
                 'id': record['id'],
