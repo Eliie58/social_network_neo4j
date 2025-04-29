@@ -92,8 +92,7 @@ class Database:
                 MATCH (follower:User {id: $user_id})-[:FOLLOWS]->(followee:User)-[:POSTED]->(p:Post)
                 RETURN p.id AS id, p.content AS content, p.timestamp AS timestamp, followee.username AS username, followee.name AS name
                 ORDER BY p.timestamp DESC
-                """,
-                {"user_id": user_id}
+                """, {"user_id": user_id}
             )
             return [{
                 'id': record['id'],
