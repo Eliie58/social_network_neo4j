@@ -44,30 +44,39 @@ class Database:
 
     # User operations
     def create_user(self, username: str, name: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO users (username, name) VALUES (?, ?)", (username, name)
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                CREATE (u:User {username: $username, name: $name, id: randomUUID()})
+                RETURN u.id AS id
+                """,
+                username=username, name=name
             )
-            return cursor.lastrowid
+            record = result.single()
+            return record["id"] if record else None
 
     def get_user(self, user_id: int) -> Optional[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT id, username, name FROM users WHERE id = ?", (user_id,)
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User)
+                WHERE u.id = $user_id
+                RETURN u.id AS id, u.username AS username, u.name AS name
+                """,
+                user_id=user_id
             )
-            row = cursor.fetchone()
-            return {"id": row[0], "username": row[1], "name": row[2]} if row else None
+            record = result.single()
+            return dict(record) if record else None
 
     def get_all_users(self) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, username, name FROM users")
-            return [
-                {"id": row[0], "username": row[1], "name": row[2]}
-                for row in cursor.fetchall()
-            ]
+        with self.driver.session() as session:
+            result = session.run(
+                """
+                MATCH (u:User)
+                RETURN u.id AS id, u.username AS username, u.name AS name
+                """
+            )
+            return [dict(record) for record in result]
 
     # Post operations
     def create_post(self, user_id: int, content: str) -> int:
