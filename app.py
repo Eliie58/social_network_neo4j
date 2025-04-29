@@ -16,24 +16,24 @@ class Database:
         self.driver.close()
      
     # User operations
-    def create_user(self, username: str, name: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO users (username, name) VALUES (?, ?)', (username, name))
-            return cursor.lastrowid
-    
-    def get_user(self, user_id: int) -> Optional[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users WHERE id = ?', (user_id,))
-            row = cursor.fetchone()
-            return {'id': row[0], 'username': row[1], 'name': row[2]} if row else None
-    
-    def get_all_users(self) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users')
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
+    def create_user(self, id, username, name):
+        query = (
+            "CREATE (u:User {id: $id, username: $username, name: $name}) RETURN u"
+        )
+        with self.driver.session() as session:
+            result = session.run(query, id=id, username=username, name=name)
+            return result.single()["u"]
+
+    def get_user(self, username):
+        query = "MATCH (u:User {username: $username}) RETURN u"
+        with self.driver.session() as session:
+            record = session.run(query, username=username).single()
+            return record["u"] if record else None
+
+    def get_all_users(self):
+        query = "MATCH (u:User) RETURN u"
+        with self.driver.session() as session:
+            return [record["u"] for record in session.run(query)]
     
     # Post operations
     def create_post(self, user_id: int, content: str) -> int:
