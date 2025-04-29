@@ -6,7 +6,7 @@ from typing import List, Optional
 # Database Access Layer (Neo4j)
 # ======================
 class Database:
-    def __init__(self, uri='bolt://localhost:7687', user='neo4j', password='admin123'):
+    def __init__(self, uri='bolt://localhost:7687', user='neo4j', password='hypothesis001'):
         self.driver = GraphDatabase.driver(uri, auth=(user, password))
 
     def close(self):
@@ -77,7 +77,10 @@ class Database:
             )
             return [dict(record) for record in result]
 
-    # Follow system
+    # ======================
+    # Task 6: Follow System (Neo4j)
+    # ======================
+
     def follow_user(self, follower_id: int, followee_id: int) -> bool:
         with self.driver.session() as session:
             session.run(
@@ -121,11 +124,12 @@ class Database:
 # ======================
 # Web Application
 # ======================
+
 app = Flask(__name__)
 app.secret_key = 'your_secret_key_here'
-db = Database(uri="bolt://localhost:7687", user="neo4j", password="admin123")
+db = Database()
 
-# Sample data initialization
+# Sample data
 with app.app_context():
     if not db.get_all_users():
         db.create_user('alice', 'Alice Smith')
@@ -135,6 +139,7 @@ with app.app_context():
 # ======================
 # API Endpoints
 # ======================
+
 @app.route('/api/users', methods=['GET'])
 def api_get_users():
     return jsonify(db.get_all_users())
@@ -175,6 +180,7 @@ def api_follow_user():
 # ======================
 # Frontend Routes
 # ======================
+
 @app.route('/')
 def home():
     users = db.get_all_users()
@@ -249,4 +255,4 @@ def follow():
     return redirect(url_for('user_profile', user_id=followee_id))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=5000)

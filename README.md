@@ -47,14 +47,6 @@ social-network/
     http://localhost:5000
     ```
 
-## Usage
-⚙️ How to Use the Environment Each Time:
-cd social_network_neo4j
-source env/bin/activate
-
-To exit the environment when you're done:
-deactivate
-
 ### Frontend Access
 1. **Homepage** - View all users and login as any user
 2. **User Profile**
