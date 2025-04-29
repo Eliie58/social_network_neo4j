@@ -4,6 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import List, Optional
 from neo4j import GraphDatabase
+import uuid 
 
 # ======================
 # Database Access Layer
@@ -26,24 +27,31 @@ class Database:
             """)
     
     # User operations
-    def create_user(self, username: str, name: str) -> int:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO users (username, name) VALUES (?, ?)', (username, name))
-            return cursor.lastrowid
+    def create_user(self, username: str, name: str) -> str:
+        user_id = str(uuid.uuid4())
+        with self.driver.session() as session:
+            session.run(
+                "CREATE (u:User {id: $id, username: $username, name: $name})",
+                {"id": user_id, "username": username, "name": name}
+            )
+        return user_id
     
-    def get_user(self, user_id: int) -> Optional[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users WHERE id = ?', (user_id,))
-            row = cursor.fetchone()
-            return {'id': row[0], 'username': row[1], 'name': row[2]} if row else None
-    
+    def get_user(self, user_id: str) -> Optional[dict]:
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (u:User {id: $id}) RETURN u.id AS id, u.username AS username, u.name AS name",
+                {"id": user_id}
+            )
+            record = result.single()
+            return {'id': record['id'], 'username': record['username'], 'name': record['name']} if record else None
+
     def get_all_users(self) -> List[dict]:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT id, username, name FROM users')
-            return [{'id': row[0], 'username': row[1], 'name': row[2]} for row in cursor.fetchall()]
+        with self.driver.session() as session:
+            result = session.run(
+                "MATCH (u:User) RETURN u.id AS id, u.username AS username, u.name AS name"
+            )
+            return [{'id': record['id'], 'username': record['username'], 'name': record['name']} for record in result]
+
     
     # Post operations
     def create_post(self, user_id: int, content: str) -> int:
