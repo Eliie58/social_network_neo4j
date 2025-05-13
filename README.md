@@ -47,8 +47,6 @@ social-network/
     http://localhost:5000
     ```
 
-## Usage
-
 ### Frontend Access
 1. **Homepage** - View all users and login as any user
 2. **User Profile**
